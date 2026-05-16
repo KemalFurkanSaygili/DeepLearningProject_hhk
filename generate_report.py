@@ -1,498 +1,440 @@
 """
-Generate the project report as a .docx file.
+Generate NEU-DET Steel Defect Classification Report (.docx)
 Run: python generate_report.py
-Output: deep_learning_report.docx
+Output: steel_defect_report.docx
 """
-
-import os, glob
+import os
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE_TYPE
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-found = glob.glob(os.path.join(
-    os.path.expanduser('~'), 'OneDrive', '*', 'deep_learning_project', 'results'))
-RESULTS_DIR = found[0] if found else os.path.join(SCRIPT_DIR, 'results')
-OUT_PATH = os.path.join(SCRIPT_DIR, 'deep_learning_report.docx')
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+RESULTS_DIR = os.path.join(SCRIPT_DIR, "results")
+DATA_DIR    = os.path.join(SCRIPT_DIR, os.pardir, "NEU-DET", "train", "images")
+OUT_PATH    = os.path.join(SCRIPT_DIR, "steel_defect_report.docx")
 
-def img(name):
-    return os.path.join(RESULTS_DIR, name)
+CLASSES = ["crazing","inclusion","patches","pitted_surface","rolled-in_scale","scratches"]
 
-# ── Document setup ────────────────────────────────────────────────────────────
+def img(name): return os.path.join(RESULTS_DIR, name)
+def sample(cls, n=1): return os.path.join(DATA_DIR, cls, f"{cls}_{n}.jpg")
+
 doc = Document()
+for s in doc.sections:
+    s.top_margin = s.bottom_margin = s.left_margin = s.right_margin = Cm(2.5)
 
-# Page margins (same as example: 2.5cm all sides)
-for section in doc.sections:
-    section.top_margin    = Cm(2.5)
-    section.bottom_margin = Cm(2.5)
-    section.left_margin   = Cm(2.5)
-    section.right_margin  = Cm(2.5)
+sty = doc.styles["Normal"]
+sty.font.name = "Arial"
+sty.font.size = Pt(12)
 
-# Default paragraph font
-style = doc.styles['Normal']
-style.font.name = 'Times New Roman'
-style.font.size = Pt(12)
-
-def set_heading(doc, text, level=1):
+def heading(text, level=1):
     h = doc.add_heading(text, level=level)
     h.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run = h.runs[0]
-    run.font.name = 'Times New Roman'
-    run.font.color.rgb = RGBColor(0, 0, 0)
-    if level == 1:
-        run.font.size = Pt(14)
-        run.bold = True
-    else:
-        run.font.size = Pt(12)
+    for run in h.runs:
+        run.font.name = "Arial"
+        run.font.color.rgb = RGBColor(0,0,0)
+        run.font.size = Pt(14 if level==1 else 12)
         run.bold = True
     return h
 
-def add_para(doc, text, bold=False, italic=False, align=WD_ALIGN_PARAGRAPH.JUSTIFY):
+def para(text, bold=False, italic=False, align=WD_ALIGN_PARAGRAPH.JUSTIFY):
     p = doc.add_paragraph()
     p.alignment = align
-    run = p.add_run(text)
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(12)
-    run.bold   = bold
-    run.italic = italic
+    r = p.add_run(text)
+    r.font.name = "Arial"; r.font.size = Pt(12)
+    r.bold = bold; r.italic = italic
     return p
 
-def add_figure(doc, img_path, caption, width=Inches(5.5)):
-    if not os.path.exists(img_path):
-        print(f'  WARNING: {img_path} not found, skipping.')
+def bullet(text):
+    p = doc.add_paragraph(style="List Bullet")
+    r = p.add_run(text)
+    r.font.name = "Arial"; r.font.size = Pt(12)
+
+def figure(path, caption, width=Inches(5.2)):
+    if not os.path.exists(path):
+        print(f"  SKIP: {path}")
         return
-    doc.add_picture(img_path, width=width)
-    last_para = doc.paragraphs[-1]
-    last_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    cap = doc.add_paragraph(caption)
-    cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    cap.runs[0].font.name = 'Times New Roman'
-    cap.runs[0].font.size = Pt(11)
-    cap.runs[0].italic = True
+    doc.add_picture(path, width=width)
+    doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    c = doc.add_paragraph(caption)
+    c.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    c.runs[0].font.name = "Arial"; c.runs[0].font.size = Pt(10); c.runs[0].italic = True
 
-def add_bullet(doc, text):
-    p = doc.add_paragraph(style='List Bullet')
-    run = p.add_run(text)
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(12)
+def table_grid(headers, rows_data):
+    t = doc.add_table(rows=1+len(rows_data), cols=len(headers))
+    t.style = "Table Grid"
+    for i,h in enumerate(headers):
+        c = t.rows[0].cells[i]; c.text = h
+        c.paragraphs[0].runs[0].bold = True
+        c.paragraphs[0].runs[0].font.name = "Arial"
+    for ri, row_data in enumerate(rows_data):
+        for ci, val in enumerate(row_data):
+            c = t.rows[ri+1].cells[ci]; c.text = val
+            c.paragraphs[0].runs[0].font.name = "Arial"
+            c.paragraphs[0].runs[0].font.size = Pt(11)
+    return t
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TITLE PAGE
-# ═══════════════════════════════════════════════════════════════════════════════
-doc.add_paragraph()
-doc.add_paragraph()
+# ── TITLE PAGE ────────────────────────────────────────────────────────────────
+doc.add_paragraph(); doc.add_paragraph()
 
-title = doc.add_paragraph()
-title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-tr = title.add_run('ESKISEHIR TECHNICAL UNIVERSITY\nFACULTY OF ENGINEERING\nDEPARTMENT OF COMPUTER ENGINEERING')
-tr.font.name = 'Times New Roman'
-tr.font.size = Pt(14)
-tr.bold = True
-
-doc.add_paragraph()
-
-course_p = doc.add_paragraph()
-course_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-cr = course_p.add_run('BIM 308 – DEEP LEARNING\nPROJECT REPORT')
-cr.font.name = 'Times New Roman'
-cr.font.size = Pt(16)
-cr.bold = True
+tp = doc.add_paragraph(); tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+r = tp.add_run("DEEP LEARNING\nPROJECT REPORT")
+r.font.name = "Arial"; r.font.size = Pt(18); r.bold = True
 
 doc.add_paragraph()
-doc.add_paragraph()
+tp2 = doc.add_paragraph(); tp2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+r2 = tp2.add_run("Steel Surface Defect Classification\nUsing CNN and ResNet18 Transfer Learning\non the NEU-DET Dataset")
+r2.font.name = "Arial"; r2.font.size = Pt(14); r2.bold = True
 
-proj_p = doc.add_paragraph()
-proj_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-pr = proj_p.add_run('Steel Surface Defect Classification\nUsing Convolutional Neural Networks (CNN)\non NEU-DET Dataset')
-pr.font.name = 'Times New Roman'
-pr.font.size = Pt(14)
-pr.bold = True
+doc.add_paragraph(); doc.add_paragraph()
 
-doc.add_paragraph()
-doc.add_paragraph()
-
-author_p = doc.add_paragraph()
-author_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-ar = author_p.add_run('Prepared by:\nKemal Furkan Saygılı')
-ar.font.name = 'Times New Roman'
-ar.font.size = Pt(12)
+auth = doc.add_paragraph(); auth.alignment = WD_ALIGN_PARAGRAPH.CENTER
+ra = auth.add_run("Prepared by:\nAd Soyad 1\nAd Soyad 2\nAd Soyad 3")
+ra.font.name = "Arial"; ra.font.size = Pt(12)
 
 doc.add_paragraph()
-
-date_p = doc.add_paragraph()
-date_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-dr = date_p.add_run('May 2025')
-dr.font.name = 'Times New Roman'
-dr.font.size = Pt(12)
+dp = doc.add_paragraph(); dp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+rd = dp.add_run("May 2025")
+rd.font.name = "Arial"; rd.font.size = Pt(12)
 
 doc.add_page_break()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 1. PROBLEM DEFINITION
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '1. Problem Definition')
-
-add_para(doc,
-    'Steel surface defects are a critical quality control issue in the manufacturing industry. '
-    'Identifying these defects manually is time-consuming, error-prone, and costly. '
-    'Automated defect detection using deep learning offers a reliable and scalable alternative '
-    'to traditional inspection methods.')
-
-add_para(doc,
-    'In this project, we address the problem of classifying six types of steel surface defects '
-    'using Convolutional Neural Networks (CNN). The classification task involves assigning each '
-    'grayscale steel surface image to exactly one of the following six defect categories:')
-
-for cls in ['Crazing – a network of fine surface cracks',
-            'Inclusion – embedded foreign particles within the steel',
-            'Patches – irregular discolored areas on the surface',
-            'Pitted Surface – small pits or holes on the surface',
-            'Rolled-in Scale – scale pressed into the surface during rolling',
-            'Scratches – linear grooves or scratches on the surface']:
-    add_bullet(doc, cls)
-
-add_para(doc,
-    'The key challenges of this problem include the visual similarity between certain defect '
-    'classes (e.g., scratches vs. pitted surface), relatively low image resolution (200×200 pixels), '
-    'and the need for high accuracy to be applicable in industrial settings.')
+# ── 1. ABSTRACT ───────────────────────────────────────────────────────────────
+heading("Abstract")
+para(
+    "This report presents a deep learning based approach for classifying steel surface defects "
+    "using the NEU-DET (Northeastern University Surface Defect Database) dataset. Six types of "
+    "defects — crazing, inclusion, patches, pitted surface, rolled-in scale, and scratches — "
+    "are identified using two CNN-based models: a Custom CNN trained from scratch and a "
+    "ResNet18 model adapted via Transfer Learning. Both models were trained for 20 epochs and "
+    "evaluated on a held-out validation set. The ResNet18 achieved 98.61% accuracy and the "
+    "Custom CNN achieved 97.78%, demonstrating the effectiveness of deep learning for "
+    "automated industrial quality control.")
 
 doc.add_paragraph()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 2. NEURAL NETWORK MODEL EXPLANATION
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '2. Neural Network Models Used')
+# ── 2. INTRODUCTION ───────────────────────────────────────────────────────────
+heading("1. Introduction")
+para(
+    "Steel surface defects represent a significant challenge in the manufacturing industry. "
+    "Manual inspection is slow, inconsistent, and prone to human error. Automated vision-based "
+    "systems using deep learning can detect defects with high accuracy at production speeds. "
+    "Convolutional Neural Networks (CNNs) are the dominant architecture for image classification "
+    "tasks due to their ability to learn hierarchical spatial features directly from raw pixels.")
+para(
+    "This project implements and compares two CNN-based approaches: (1) a Custom CNN designed "
+    "from scratch, and (2) ResNet18 with Transfer Learning from ImageNet. The goal is to "
+    "classify six distinct steel surface defect types and understand why these two approaches "
+    "yield different performance levels.")
+doc.add_paragraph()
 
-add_para(doc,
-    'Two CNN-based models were implemented and compared in this project: a Custom CNN built '
-    'from scratch, and a pre-trained ResNet18 adapted via Transfer Learning.')
+# ── 3. DATASET ────────────────────────────────────────────────────────────────
+heading("2. Dataset — NEU-DET")
+para(
+    "The NEU-DET dataset is a standard benchmark for steel surface defect detection, "
+    "provided by Northeastern University, China. It contains 1,800 grayscale images "
+    "across 6 defect classes, with each image sized 200×200 pixels.")
 
-set_heading(doc, '2.1 Custom CNN Architecture', level=2)
+doc.add_paragraph()
+table_grid(
+    ["Defect Class", "Train Images", "Val Images", "Description"],
+    [
+        ("Crazing",         "240", "60", "Network of fine surface cracks"),
+        ("Inclusion",       "240", "60", "Embedded foreign particles"),
+        ("Patches",         "240", "60", "Irregular discolored areas"),
+        ("Pitted Surface",  "240", "60", "Small pits or holes"),
+        ("Rolled-in Scale", "240", "60", "Scale pressed into surface"),
+        ("Scratches",       "240", "60", "Linear grooves on surface"),
+        ("TOTAL",           "1440","360","Balanced dataset"),
+    ]
+)
+doc.add_paragraph()
 
-add_para(doc,
-    'The Custom CNN was designed specifically for this classification task. '
-    'It consists of four convolutional blocks followed by global average pooling and '
-    'a fully connected classification head:')
+para(
+    "The dataset is perfectly balanced: each class has exactly 240 training images and "
+    "60 validation images. Images are grayscale (stored as RGB), and the visual similarity "
+    "between some classes (e.g., pitted surface vs. scratches) makes this a non-trivial "
+    "classification task.")
+
+figure(img("dataset_distribution.png"),
+       "Figure 1. Class distribution of the NEU-DET dataset (train and validation splits).")
+doc.add_paragraph()
+
+# ── DATASET SAMPLES ───────────────────────────────────────────────────────────
+heading("2.1 Dataset Sample Images", level=2)
+para(
+    "Below are representative sample images from each defect class. Note the visual "
+    "differences and similarities that challenge the classification models.")
+
+for i, cls in enumerate(CLASSES):
+    sp = sample(cls, 1)
+    figure(sp, f"Figure {i+2}. Sample image — class: '{cls}'", width=Inches(2.5))
+
+doc.add_paragraph()
+
+# Data augmentation
+heading("2.2 Data Augmentation", level=2)
+para("The following augmentation techniques were applied to the training set only:")
+for aug in [
+    "Random horizontal flip (p=0.5)",
+    "Random vertical flip (p=0.5)",
+    "Random rotation ±15°",
+    "Color jitter: brightness ±20%, contrast ±20%, saturation ±10%",
+    "Resize to 224×224 (required for ResNet18 compatibility)",
+    "Normalization: mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225] (ImageNet stats)",
+]:
+    bullet(aug)
+doc.add_paragraph()
+
+# ── 4. MODEL ARCHITECTURES ────────────────────────────────────────────────────
+heading("3. Model Architectures")
+
+heading("3.1 Custom CNN", level=2)
+para(
+    "The Custom CNN was designed specifically for this 6-class defect classification task. "
+    "It uses a progressive feature extraction strategy with four convolutional blocks, "
+    "each doubling the number of feature maps while halving the spatial dimensions:")
 
 for item in [
-    'Conv Block 1: 3 → 32 filters (Conv2D × 2, BatchNorm, ReLU, MaxPool 2×2) — output: 112×112',
-    'Conv Block 2: 32 → 64 filters (Conv2D × 2, BatchNorm, ReLU, MaxPool 2×2) — output: 56×56',
-    'Conv Block 3: 64 → 128 filters (Conv2D × 2, BatchNorm, ReLU, MaxPool 2×2) — output: 28×28',
-    'Conv Block 4: 128 → 256 filters (Conv2D × 2, BatchNorm, ReLU, MaxPool 2×2) — output: 14×14',
-    'Global Average Pooling → 256-dimensional feature vector',
-    'Fully Connected: 256 → 512 → Dropout(0.5) → 6 (softmax output)',
+    "Conv Block 1: 3→32 filters  | Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 112×112",
+    "Conv Block 2: 32→64 filters | Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 56×56",
+    "Conv Block 3: 64→128 filters| Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 28×28",
+    "Conv Block 4: 128→256 filters| Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2)| Output: 14×14",
+    "Global Average Pooling → 256-dim feature vector",
+    "Fully Connected: 256 → 512 → ReLU → Dropout(0.5) → 6 (softmax)",
 ]:
-    add_bullet(doc, item)
+    bullet(item)
 
-add_para(doc,
-    'Batch Normalization is applied after each convolutional layer to stabilize training '
-    'and accelerate convergence. Dropout (p=0.5) is applied in the classifier head to '
-    'reduce overfitting. The total number of trainable parameters is approximately 2.4 million.')
+para(
+    "Total trainable parameters: ~2.4 million. "
+    "BatchNormalization after each Conv layer stabilizes training and allows "
+    "higher learning rates. Dropout(0.5) in the classifier head prevents overfitting.")
+doc.add_paragraph()
 
-set_heading(doc, '2.2 ResNet18 with Transfer Learning', level=2)
-
-add_para(doc,
-    'ResNet18 is a 18-layer deep residual network pre-trained on the ImageNet dataset '
-    '(1.2 million images, 1000 classes). Transfer learning allows us to leverage the '
-    'powerful feature representations already learned from large-scale data.')
-
-add_para(doc,
-    'For this project, all layers of ResNet18 were frozen (weights not updated during training) '
-    'and only the final classification head was replaced and trained:')
-
+heading("3.2 ResNet18 with Transfer Learning", level=2)
+para(
+    "ResNet18 is an 18-layer deep residual network pre-trained on ImageNet "
+    "(1.2 million images, 1000 classes). Its key innovation is the residual (skip) "
+    "connection: instead of learning H(x), each block learns F(x) = H(x) − x, "
+    "making it easier to optimize. This solves the vanishing gradient problem and "
+    "allows training of much deeper networks.")
+para(
+    "For this project, all backbone layers were frozen and only the classification "
+    "head was replaced:")
 for item in [
-    'Frozen backbone: ResNet18 (11,176,512 parameters — not updated)',
-    'New classification head: FC(512→256) → ReLU → Dropout(0.4) → FC(256→6)',
-    'Trainable parameters: 132,870 (~1.2% of total)',
+    "Backbone: ResNet18 (conv1 → layer1 → layer2 → layer3 → layer4 → AvgPool) — FROZEN",
+    "Feature dimension: 512 (ResNet18 output)",
+    "New head: Linear(512→256) → ReLU → Dropout(0.4) → Linear(256→6)",
+    "Trainable parameters: 132,870 (~1.2% of total 11.2M parameters)",
 ]:
-    add_bullet(doc, item)
-
-add_para(doc,
-    'This approach is computationally efficient and particularly effective when the target '
-    'dataset is relatively small, as ImageNet features generalize well to texture-based '
-    'classification tasks such as defect detection.')
-
+    bullet(item)
 doc.add_paragraph()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 3. DATASET
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '3. Dataset Description')
+# ── 5. WHY DO THEY GIVE DIFFERENT RESULTS? ────────────────────────────────────
+heading("4. Why Do ResNet18 and Custom CNN Give Different Results?")
+para(
+    "This is the central analytical question of this project. Despite the Custom CNN "
+    "having ~18× more trainable parameters, ResNet18 outperforms it. The reasons "
+    "are explained below:")
 
-add_para(doc,
-    'The NEU-DET (NEU Surface Defect Database) dataset was used in this project. '
-    'It is a widely used benchmark dataset for steel surface defect detection and '
-    'classification, provided by Northeastern University, China.')
+heading("4.1 Pre-trained Feature Representations", level=2)
+para(
+    "ResNet18 was trained on 1.2 million images spanning 1000 categories. During this "
+    "training, it learned to detect universal visual features: edges, textures, corners, "
+    "gradients, and complex patterns. These low-level features are directly applicable "
+    "to steel defect images. The Custom CNN, trained on only 1,440 images, must learn "
+    "all these features from scratch — a much harder optimization problem.")
 
-add_para(doc, 'Dataset statistics:')
+heading("4.2 Network Depth and Residual Connections", level=2)
+para(
+    "ResNet18 has 18 layers with skip connections. The Custom CNN has 8 convolutional "
+    "layers (no skip connections). Residual connections allow gradients to flow directly "
+    "from deep layers back to shallow layers, enabling effective training of deeper "
+    "representations. Without them, the Custom CNN cannot build as rich a hierarchy "
+    "of features, limiting its discriminative power for visually similar classes.")
 
-table = doc.add_table(rows=4, cols=4)
-table.style = 'Table Grid'
-hdr = table.rows[0].cells
-for i, txt in enumerate(['Split', 'Images per Class', 'Total Classes', 'Total Images']):
-    hdr[i].text = txt
-    hdr[i].paragraphs[0].runs[0].bold = True
-    hdr[i].paragraphs[0].runs[0].font.name = 'Times New Roman'
+heading("4.3 Training Data Efficiency", level=2)
+para(
+    "Transfer Learning dramatically reduces the data requirement. ResNet18 needs only "
+    "to learn a 132K-parameter classification head on top of already-powerful features. "
+    "The Custom CNN must optimize 2.4M parameters with the same 1,440 training images "
+    "(240 per class), making it prone to overfitting despite augmentation and Dropout.")
 
-rows_data = [
-    ('Train',      '240', '6', '1,440'),
-    ('Validation', '60',  '6', '360'),
-    ('Total',      '300', '6', '1,800'),
-]
-for i, row_data in enumerate(rows_data):
-    row = table.rows[i+1].cells
-    for j, val in enumerate(row_data):
-        row[j].text = val
-        row[j].paragraphs[0].runs[0].font.name = 'Times New Roman'
-        row[j].paragraphs[0].runs[0].font.size = Pt(11)
-
+heading("4.4 Most Confused Classes", level=2)
+para(
+    "Both confusion matrices reveal that the hardest class pairs are 'pitted_surface' "
+    "and 'scratches'. These defects share similar low-level texture features "
+    "(sharp, localized discontinuities). ResNet18's richer feature space — built from "
+    "millions of images — provides better discrimination. The Custom CNN's simpler "
+    "feature hierarchy struggles more with these borderline cases.")
 doc.add_paragraph()
 
-add_para(doc,
-    'Images are grayscale, 200×200 pixels, and organized into per-class subdirectories. '
-    'The dataset is perfectly balanced with equal samples per class in both splits.')
-
-add_para(doc,
-    'Data augmentation was applied to the training set to improve generalization:')
-for aug in ['Random horizontal and vertical flipping',
-            'Random rotation (±15°)',
-            'Color jitter (brightness, contrast, saturation)',
-            'Resize to 224×224 pixels (required for ResNet18 input)']:
-    add_bullet(doc, aug)
-
-add_para(doc,
-    'The dataset was obtained from the official NEU-DET distribution. '
-    'It is a standardized benchmark frequently cited in industrial defect detection research.')
-
-add_figure(doc, img('dataset_distribution.png'),
-           'Figure 1. Class distribution of the NEU-DET dataset across train and validation splits.')
-
+# ── 6. TRAINING SETUP ─────────────────────────────────────────────────────────
+heading("5. Training Configuration")
+table_grid(
+    ["Hyperparameter", "Value"],
+    [
+        ("Optimizer",        "Adam"),
+        ("Learning Rate",    "1e-3"),
+        ("Weight Decay",     "1e-4"),
+        ("Loss Function",    "Cross-Entropy Loss"),
+        ("LR Scheduler",     "ReduceLROnPlateau (factor=0.5, patience=3)"),
+        ("Batch Size",       "32"),
+        ("Epochs",           "20"),
+        ("Image Size",       "224×224 pixels"),
+        ("Device",           "CPU / CUDA (auto-detected)"),
+        ("Seed",             "42 (reproducibility)"),
+    ]
+)
 doc.add_paragraph()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 4. IMPLEMENTATION
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '4. Implementation Details')
+# ── 7. RESULTS ────────────────────────────────────────────────────────────────
+heading("6. Simulation Results")
 
-add_para(doc, 'The project was implemented in Python using the PyTorch deep learning framework. '
-    'All experiments were run on CPU (Intel). The following hyperparameters were used for both models:')
+heading("6.1 Training History", level=2)
+para(
+    "Both models were trained for 20 epochs. The ReduceLROnPlateau scheduler "
+    "automatically reduced the learning rate when validation loss stopped improving, "
+    "helping both models converge to better optima.")
+figure(img("training_history.png"),
+       "Figure 8. Loss and accuracy curves for Custom CNN and ResNet18 over 20 epochs.")
+doc.add_paragraph()
 
+heading("6.2 Custom CNN Results", level=2)
+para("Performance on the 360-image validation set:")
 for item in [
-    'Optimizer: Adam (lr=1e-3, weight_decay=1e-4)',
-    'Loss function: Cross-Entropy Loss',
-    'Scheduler: ReduceLROnPlateau (factor=0.5, patience=3)',
-    'Batch size: 32',
-    'Number of epochs: 20',
-    'Image size: 224×224 (RGB)',
+    "Validation Accuracy: 97.78%  (352/360 correct)",
+    "Macro F1-Score: 0.9777",
+    "Perfect classification (F1=1.00): crazing, patches, rolled-in_scale",
+    "Most errors: pitted_surface ↔ scratches confusion",
 ]:
-    add_bullet(doc, item)
-
+    bullet(item)
+figure(img("cm_custom_cnn.png"),
+       "Figure 9. Confusion matrix — Custom CNN on validation set.")
+figure(img("samples_custom_cnn.png"),
+       "Figure 10. Sample Custom CNN predictions (green = correct, red = incorrect).")
 doc.add_paragraph()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 5. SIMULATION RESULTS
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '5. Simulation Results')
-
-add_para(doc,
-    'Both models were trained for 20 epochs and evaluated on the validation set. '
-    'The best model state (highest validation accuracy) was saved and used for final evaluation.')
-
-set_heading(doc, '5.1 Training History', level=2)
-add_figure(doc, img('training_history.png'),
-           'Figure 2. Training and validation loss and accuracy curves for both models over 20 epochs.')
-
-set_heading(doc, '5.2 Custom CNN Results', level=2)
-
-add_para(doc, 'The Custom CNN achieved the following results on the validation set:')
-for item in ['Validation Accuracy: 97.78%',
-             'Macro F1-Score: 0.9777',
-             'Best performance on: crazing, patches, rolled-in_scale (F1 = 1.00)']:
-    add_bullet(doc, item)
-
-add_figure(doc, img('cm_custom_cnn.png'),
-           'Figure 3. Confusion matrix of the Custom CNN on the validation set.')
-
-add_figure(doc, img('samples_custom_cnn.png'),
-           'Figure 4. Sample predictions of the Custom CNN (green = correct, red = incorrect).')
-
-set_heading(doc, '5.3 ResNet18 Transfer Learning Results', level=2)
-
-add_para(doc, 'The ResNet18 model with Transfer Learning achieved the following results:')
-for item in ['Validation Accuracy: 98.61%',
-             'Macro F1-Score: 0.9861',
-             'Correctly classified: 355 out of 360 images']:
-    add_bullet(doc, item)
-
-add_figure(doc, img('cm_resnet18.png'),
-           'Figure 5. Confusion matrix of ResNet18 (Transfer Learning) on the validation set.')
-
-add_figure(doc, img('samples_resnet18.png'),
-           'Figure 6. Sample predictions of ResNet18 (green = correct, red = incorrect).')
-
-set_heading(doc, '5.4 Model Comparison', level=2)
-
-add_figure(doc, img('model_comparison.png'),
-           'Figure 7. Comparison of validation accuracy and macro F1-score for both models.')
-
-# Summary table
-add_para(doc, 'Summary of results:')
-table2 = doc.add_table(rows=3, cols=4)
-table2.style = 'Table Grid'
-hdr2 = table2.rows[0].cells
-for i, txt in enumerate(['Model', 'Val Accuracy', 'Macro F1', 'Trainable Params']):
-    hdr2[i].text = txt
-    hdr2[i].paragraphs[0].runs[0].bold = True
-    hdr2[i].paragraphs[0].runs[0].font.name = 'Times New Roman'
-
-rows_data2 = [
-    ('Custom CNN',         '97.78%', '0.9777', '~2.4M'),
-    ('ResNet18 (TL)',      '98.61%', '0.9861', '132,870'),
-]
-for i, row_data in enumerate(rows_data2):
-    row = table2.rows[i+1].cells
-    for j, val in enumerate(row_data):
-        row[j].text = val
-        row[j].paragraphs[0].runs[0].font.name = 'Times New Roman'
-        row[j].paragraphs[0].runs[0].font.size = Pt(11)
-
-doc.add_paragraph()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 6. DISCUSSION & ANALYSIS
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '6. Discussion and Analysis')
-
-add_para(doc,
-    'Both models achieved excellent performance on the NEU-DET validation set, '
-    'with accuracies above 97%. This demonstrates that CNN-based architectures are '
-    'well-suited for steel surface defect classification.')
-
-add_para(doc,
-    'Transfer Learning (ResNet18) outperformed the Custom CNN by approximately 0.83 percentage '
-    'points in accuracy. Despite using only 132,870 trainable parameters (compared to ~2.4M for '
-    'Custom CNN), ResNet18 benefited from rich feature representations pre-trained on ImageNet, '
-    'enabling faster convergence and better generalization.')
-
-add_para(doc,
-    'The confusion matrices reveal that the most challenging class pair is '
-    'pitted_surface vs. scratches. These two defects share similar low-level '
-    'texture features (sharp discontinuities on the surface), making them harder '
-    'to distinguish even for deep networks.')
-
-add_para(doc,
-    'The training curves show that both models converged smoothly without significant '
-    'overfitting. The ReduceLROnPlateau scheduler effectively decreased the learning '
-    'rate when validation loss plateaued, helping models find better optima.')
-
-add_para(doc,
-    'Data augmentation (flipping, rotation, color jitter) played a key role in '
-    'preventing overfitting on the relatively small training set of 1,440 images.')
-
-doc.add_paragraph()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 7. CONCLUSION
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '7. Conclusion')
-
-add_para(doc,
-    'In this project, we successfully applied Convolutional Neural Networks to the task '
-    'of steel surface defect classification using the NEU-DET dataset. Two approaches '
-    'were implemented and compared:')
-
+heading("6.3 ResNet18 Transfer Learning Results", level=2)
+para("Performance on the 360-image validation set:")
 for item in [
-    'Custom CNN trained from scratch: 97.78% validation accuracy',
-    'ResNet18 with Transfer Learning: 98.61% validation accuracy',
+    "Validation Accuracy: 98.61%  (355/360 correct)",
+    "Macro F1-Score: 0.9861",
+    "Correctly classified: 355 out of 360 images",
+    "Fewer errors on pitted_surface and scratches compared to Custom CNN",
 ]:
-    add_bullet(doc, item)
+    bullet(item)
+figure(img("cm_resnet18.png"),
+       "Figure 11. Confusion matrix — ResNet18 Transfer Learning on validation set.")
+figure(img("samples_resnet18.png"),
+       "Figure 12. Sample ResNet18 predictions (green = correct, red = incorrect).")
+doc.add_paragraph()
 
-add_para(doc,
-    'Both models achieved strong results, with the Transfer Learning approach proving '
-    'slightly superior. The results confirm that deep learning is an effective and '
-    'practical solution for automated quality control in steel manufacturing.')
+heading("6.4 Model Comparison", level=2)
+figure(img("model_comparison.png"),
+       "Figure 13. Validation accuracy and macro F1-score comparison.")
+doc.add_paragraph()
+table_grid(
+    ["Model", "Val Accuracy", "Macro F1", "Trainable Params", "Advantage"],
+    [
+        ("Custom CNN",      "97.78%", "0.9777", "~2.4M",   "No pre-training needed"),
+        ("ResNet18 (TL)",   "98.61%", "0.9861", "132,870", "Faster, more accurate"),
+    ]
+)
+doc.add_paragraph()
 
-add_para(doc,
-    'Future work could explore: (1) fine-tuning all ResNet18 layers with a lower learning '
-    'rate, (2) using more advanced architectures such as EfficientNet or Vision Transformers, '
-    '(3) multi-label classification for images containing multiple defect types, and '
-    '(4) deploying the model as a real-time inspection system.')
+# ── 8. DISCUSSION ─────────────────────────────────────────────────────────────
+heading("7. Discussion and Analysis")
+para(
+    "Both models achieve excellent accuracy above 97%, confirming that CNN-based "
+    "architectures are well suited for industrial surface defect classification. "
+    "However, the performance gap — though small in percentage — is meaningful in "
+    "industrial applications where every misclassification has a cost.")
+para(
+    "The key insight is that Transfer Learning provides a better accuracy/cost tradeoff: "
+    "ResNet18 achieves higher accuracy while training 18× fewer parameters. This is "
+    "because the ImageNet-pretrained backbone already encodes rich, generalizable "
+    "visual features. The Custom CNN must discover all features from 1,440 images, "
+    "which is a fundamentally harder optimization problem.")
+para(
+    "Both confusion matrices show that 'pitted_surface' and 'scratches' are the most "
+    "commonly confused pair. Visual inspection of samples confirms they share similar "
+    "textures: both appear as sharp, localized surface discontinuities with varying "
+    "spatial distributions. ResNet18 handles this pair better, likely because its "
+    "deeper feature hierarchy captures more subtle distributional differences.")
+para(
+    "Data augmentation (random flips, rotation, color jitter) was critical for "
+    "preventing overfitting in the Custom CNN given the small dataset size. "
+    "The ReduceLROnPlateau scheduler provided adaptive learning rate control, "
+    "ensuring both models converged without getting stuck in poor local minima.")
+doc.add_paragraph()
+
+# ── 9. CONCLUSION ─────────────────────────────────────────────────────────────
+heading("8. Conclusion")
+para(
+    "This project successfully applied deep learning to the classification of six steel "
+    "surface defect types from the NEU-DET dataset. Two architectures were compared:")
+for item in [
+    "Custom CNN (trained from scratch): 97.78% validation accuracy, 2.4M parameters",
+    "ResNet18 with Transfer Learning: 98.61% validation accuracy, 132,870 parameters",
+]:
+    bullet(item)
+para(
+    "Transfer Learning with ResNet18 proved superior: higher accuracy, fewer trainable "
+    "parameters, and faster convergence. The pre-trained ImageNet features generalized "
+    "effectively to the steel defect domain. Both models are viable for industrial "
+    "deployment, with ResNet18 being the recommended choice.")
+para(
+    "Future directions include: (1) fine-tuning ResNet18 backbone with low LR, "
+    "(2) experimenting with EfficientNet or Vision Transformers, "
+    "(3) applying Grad-CAM to visualize which image regions drive predictions, "
+    "and (4) testing on larger, more diverse steel defect datasets.")
+doc.add_paragraph()
+
+# ── 10. HOW TO RUN ────────────────────────────────────────────────────────────
+heading("9. How to Run the Code")
+
+heading("Installation", level=2)
+cp = doc.add_paragraph()
+r = cp.add_run("python -m pip install torch torchvision matplotlib scikit-learn seaborn python-docx")
+r.font.name = "Courier New"; r.font.size = Pt(10)
+
+heading("Train both models", level=2)
+c2 = doc.add_paragraph()
+r2 = c2.add_run("python deeplearning.py")
+r2.font.name = "Courier New"; r2.font.size = Pt(10)
+
+heading("Test with a single image", level=2)
+c3 = doc.add_paragraph()
+r3 = c3.add_run(
+    'python test.py --model resnet18 --image "path/to/your/image.jpg"\n'
+    'python test.py --model custom_cnn --image "path/to/your/image.jpg"')
+r3.font.name = "Courier New"; r3.font.size = Pt(10)
+
+heading("Run full validation test", level=2)
+c4 = doc.add_paragraph()
+r4 = c4.add_run("python test.py --model resnet18")
+r4.font.name = "Courier New"; r4.font.size = Pt(10)
 
 doc.add_paragraph()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 8. HOW TO RUN
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, '8. How to Run the Code')
-
-set_heading(doc, 'Prerequisites', level=2)
-add_para(doc, 'Ensure you have Python 3.8+ installed.')
-add_para(doc, 'Install the required libraries:')
-
-code_p = doc.add_paragraph()
-run = code_p.add_run(
-    'python -m pip install torch torchvision matplotlib scikit-learn seaborn pdfplumber')
-run.font.name = 'Courier New'
-run.font.size = Pt(10)
-
-set_heading(doc, 'Directory Setup', level=2)
-add_para(doc, 'Place the following files in the same directory:')
-for item in ['deeplearning.py  (main training script)',
-             'NEU-DET/  (dataset folder with train/ and validation/ subdirectories)',
-             'test.py  (optional: for standalone evaluation)']:
-    add_bullet(doc, item)
-
-set_heading(doc, 'Training', level=2)
-code2 = doc.add_paragraph()
-run2 = code2.add_run('python deeplearning.py')
-run2.font.name = 'Courier New'
-run2.font.size = Pt(10)
-
-add_para(doc,
-    'Training will run for 20 epochs. Results (plots and model weights) will be '
-    'saved automatically to the results/ folder.')
-
-set_heading(doc, 'Submission Mode (100 samples)', level=2)
-add_para(doc, 'To run with only 100 dataset samples, open deeplearning.py and set:')
-code3 = doc.add_paragraph()
-run3 = code3.add_run('SUBMISSION_MODE = True')
-run3.font.name = 'Courier New'
-run3.font.size = Pt(10)
-add_para(doc, 'Then run: python deeplearning.py')
-
-set_heading(doc, 'Evaluation', level=2)
-code4 = doc.add_paragraph()
-run4 = code4.add_run(
-    'python test.py --model resnet18\n'
-    'python test.py --image "NEU-DET/validation/images/crazing/crazing_241.jpg"')
-run4.font.name = 'Courier New'
-run4.font.size = Pt(10)
-
-doc.add_paragraph()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# REFERENCES
-# ═══════════════════════════════════════════════════════════════════════════════
-set_heading(doc, 'References')
-
+# ── REFERENCES ────────────────────────────────────────────────────────────────
+heading("References")
 refs = [
-    'K. Song and Y. Yan, "A noise robust method based on completed local binary patterns for hot-rolled steel strip surface defects," Applied Surface Science, vol. 285, pp. 858–864, 2013.',
-    'He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition (pp. 770–778).',
+    'K. Song and Y. Yan, "A noise robust method based on completed local binary patterns for '
+    'hot-rolled steel strip surface defects," Applied Surface Science, vol. 285, pp. 858-864, 2013.',
+    'He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. '
+    'CVPR 2016, pp. 770-778.',
     'NEU Surface Defect Database. http://faculty.neu.edu.cn/yunhyan/NEU_surface_defect_database.html',
-    'Paszke, A., et al. (2019). PyTorch: An imperative style, high-performance deep learning library. Advances in Neural Information Processing Systems, 32.',
-    'Pan, S. J., & Yang, Q. (2009). A survey on transfer learning. IEEE Transactions on knowledge and data engineering, 22(10), 1345–1359.',
-    'Litjens, G., et al. (2017). A survey on deep learning in medical image analysis. Medical image analysis, 42, 60–88.',
+    'Paszke, A., et al. (2019). PyTorch: An imperative style, high-performance deep learning library. NeurIPS 32.',
+    'Pan, S. J., & Yang, Q. (2009). A survey on transfer learning. '
+    'IEEE Trans. Knowledge and Data Engineering, 22(10), 1345-1359.',
+    'LeCun, Y., Bengio, Y., & Hinton, G. (2015). Deep learning. Nature, 521(7553), 436-444.',
 ]
-for i, ref in enumerate(refs, 1):
-    p = doc.add_paragraph(style='List Number')
-    run = p.add_run(ref)
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(11)
+for ref in refs:
+    p = doc.add_paragraph(style="List Number")
+    r = p.add_run(ref)
+    r.font.name = "Arial"; r.font.size = Pt(11)
 
-# ── Save ──────────────────────────────────────────────────────────────────────
+# ── SAVE ──────────────────────────────────────────────────────────────────────
 doc.save(OUT_PATH)
-print(f'\nReport saved: {OUT_PATH}')
+print(f"\nReport saved: {OUT_PATH}")
