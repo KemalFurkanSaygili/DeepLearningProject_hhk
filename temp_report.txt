@@ -1,0 +1,140 @@
+
+
+DEEP LEARNING
+PROJECT REPORT
+
+Steel Surface Defect Classification
+Using CNN and ResNet18 Transfer Learning
+on the NEU-DET Dataset
+
+
+Prepared by:
+Ad Soyad 1
+Ad Soyad 2
+Ad Soyad 3
+
+May 2025
+
+Abstract
+This report presents a deep learning based approach for classifying steel surface defects using the NEU-DET (Northeastern University Surface Defect Database) dataset. Six types of defects — crazing, inclusion, patches, pitted surface, rolled-in scale, and scratches — are identified using two CNN-based models: a Custom CNN trained from scratch and a ResNet18 model adapted via Transfer Learning. Both models were trained for 20 epochs and evaluated on a held-out validation set. The ResNet18 achieved 98.61% accuracy and the Custom CNN achieved 97.78%, demonstrating the effectiveness of deep learning for automated industrial quality control.
+
+1. Introduction
+Steel surface defects represent a significant challenge in the manufacturing industry. Manual inspection is slow, inconsistent, and prone to human error. Automated vision-based systems using deep learning can detect defects with high accuracy at production speeds. Convolutional Neural Networks (CNNs) are the dominant architecture for image classification tasks due to their ability to learn hierarchical spatial features directly from raw pixels.
+This project implements and compares two CNN-based approaches: (1) a Custom CNN designed from scratch, and (2) ResNet18 with Transfer Learning from ImageNet. The goal is to classify six distinct steel surface defect types and understand why these two approaches yield different performance levels.
+
+2. Dataset — NEU-DET
+The NEU-DET dataset is a standard benchmark for steel surface defect detection, provided by Northeastern University, China. It contains 1,800 grayscale images across 6 defect classes, with each image sized 200×200 pixels.
+
+
+The dataset is perfectly balanced: each class has exactly 240 training images and 60 validation images. Images are grayscale (stored as RGB), and the visual similarity between some classes (e.g., pitted surface vs. scratches) makes this a non-trivial classification task.
+
+Figure 1. Class distribution of the NEU-DET dataset (train and validation splits).
+
+2.1 Dataset Sample Images
+Below are representative sample images from each defect class. Note the visual differences and similarities that challenge the classification models.
+
+2.2 Data Augmentation
+The following augmentation techniques were applied to the training set only:
+Random horizontal flip (p=0.5)
+Random vertical flip (p=0.5)
+Random rotation ±15°
+Color jitter: brightness ±20%, contrast ±20%, saturation ±10%
+Resize to 224×224 (required for ResNet18 compatibility)
+Normalization: mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225] (ImageNet stats)
+
+3. Model Architectures
+3.1 Custom CNN
+The Custom CNN was designed specifically for this 6-class defect classification task. It uses a progressive feature extraction strategy with four convolutional blocks, each doubling the number of feature maps while halving the spatial dimensions:
+Conv Block 1: 3→32 filters  | Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 112×112
+Conv Block 2: 32→64 filters | Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 56×56
+Conv Block 3: 64→128 filters| Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2) | Output: 28×28
+Conv Block 4: 128→256 filters| Conv2D(3×3)×2 → BatchNorm → ReLU → MaxPool(2×2)| Output: 14×14
+Global Average Pooling → 256-dim feature vector
+Fully Connected: 256 → 512 → ReLU → Dropout(0.5) → 6 (softmax)
+Total trainable parameters: ~2.4 million. BatchNormalization after each Conv layer stabilizes training and allows higher learning rates. Dropout(0.5) in the classifier head prevents overfitting.
+
+3.2 ResNet18 with Transfer Learning
+ResNet18 is an 18-layer deep residual network pre-trained on ImageNet (1.2 million images, 1000 classes). Its key innovation is the residual (skip) connection: instead of learning H(x), each block learns F(x) = H(x) − x, making it easier to optimize. This solves the vanishing gradient problem and allows training of much deeper networks.
+For this project, all backbone layers were frozen and only the classification head was replaced:
+Backbone: ResNet18 (conv1 → layer1 → layer2 → layer3 → layer4 → AvgPool) — FROZEN
+Feature dimension: 512 (ResNet18 output)
+New head: Linear(512→256) → ReLU → Dropout(0.4) → Linear(256→6)
+Trainable parameters: 132,870 (~1.2% of total 11.2M parameters)
+
+4. Why Do ResNet18 and Custom CNN Give Different Results?
+This is the central analytical question of this project. Despite the Custom CNN having ~18× more trainable parameters, ResNet18 outperforms it. The reasons are explained below:
+4.1 Pre-trained Feature Representations
+ResNet18 was trained on 1.2 million images spanning 1000 categories. During this training, it learned to detect universal visual features: edges, textures, corners, gradients, and complex patterns. These low-level features are directly applicable to steel defect images. The Custom CNN, trained on only 1,440 images, must learn all these features from scratch — a much harder optimization problem.
+4.2 Network Depth and Residual Connections
+ResNet18 has 18 layers with skip connections. The Custom CNN has 8 convolutional layers (no skip connections). Residual connections allow gradients to flow directly from deep layers back to shallow layers, enabling effective training of deeper representations. Without them, the Custom CNN cannot build as rich a hierarchy of features, limiting its discriminative power for visually similar classes.
+4.3 Training Data Efficiency
+Transfer Learning dramatically reduces the data requirement. ResNet18 needs only to learn a 132K-parameter classification head on top of already-powerful features. The Custom CNN must optimize 2.4M parameters with the same 1,440 training images (240 per class), making it prone to overfitting despite augmentation and Dropout.
+4.4 Most Confused Classes
+Both confusion matrices reveal that the hardest class pairs are 'pitted_surface' and 'scratches'. These defects share similar low-level texture features (sharp, localized discontinuities). ResNet18's richer feature space — built from millions of images — provides better discrimination. The Custom CNN's simpler feature hierarchy struggles more with these borderline cases.
+
+5. Training Configuration
+
+6. Simulation Results
+6.1 Training History
+Both models were trained for 20 epochs. The ReduceLROnPlateau scheduler automatically reduced the learning rate when validation loss stopped improving, helping both models converge to better optima.
+
+Figure 8. Loss and accuracy curves for Custom CNN and ResNet18 over 20 epochs.
+
+6.2 Custom CNN Results
+Performance on the 360-image validation set:
+Validation Accuracy: 97.78%  (352/360 correct)
+Macro F1-Score: 0.9777
+Perfect classification (F1=1.00): crazing, patches, rolled-in_scale
+Most errors: pitted_surface ↔ scratches confusion
+
+Figure 9. Confusion matrix — Custom CNN on validation set.
+
+Figure 10. Sample Custom CNN predictions (green = correct, red = incorrect).
+
+6.3 ResNet18 Transfer Learning Results
+Performance on the 360-image validation set:
+Validation Accuracy: 98.61%  (355/360 correct)
+Macro F1-Score: 0.9861
+Correctly classified: 355 out of 360 images
+Fewer errors on pitted_surface and scratches compared to Custom CNN
+
+Figure 11. Confusion matrix — ResNet18 Transfer Learning on validation set.
+
+Figure 12. Sample ResNet18 predictions (green = correct, red = incorrect).
+
+6.4 Model Comparison
+
+Figure 13. Validation accuracy and macro F1-score comparison.
+
+
+7. Discussion and Analysis
+Both models achieve excellent accuracy above 97%, confirming that CNN-based architectures are well suited for industrial surface defect classification. However, the performance gap — though small in percentage — is meaningful in industrial applications where every misclassification has a cost.
+The key insight is that Transfer Learning provides a better accuracy/cost tradeoff: ResNet18 achieves higher accuracy while training 18× fewer parameters. This is because the ImageNet-pretrained backbone already encodes rich, generalizable visual features. The Custom CNN must discover all features from 1,440 images, which is a fundamentally harder optimization problem.
+Both confusion matrices show that 'pitted_surface' and 'scratches' are the most commonly confused pair. Visual inspection of samples confirms they share similar textures: both appear as sharp, localized surface discontinuities with varying spatial distributions. ResNet18 handles this pair better, likely because its deeper feature hierarchy captures more subtle distributional differences.
+Data augmentation (random flips, rotation, color jitter) was critical for preventing overfitting in the Custom CNN given the small dataset size. The ReduceLROnPlateau scheduler provided adaptive learning rate control, ensuring both models converged without getting stuck in poor local minima.
+
+8. Conclusion
+This project successfully applied deep learning to the classification of six steel surface defect types from the NEU-DET dataset. Two architectures were compared:
+Custom CNN (trained from scratch): 97.78% validation accuracy, 2.4M parameters
+ResNet18 with Transfer Learning: 98.61% validation accuracy, 132,870 parameters
+Transfer Learning with ResNet18 proved superior: higher accuracy, fewer trainable parameters, and faster convergence. The pre-trained ImageNet features generalized effectively to the steel defect domain. Both models are viable for industrial deployment, with ResNet18 being the recommended choice.
+Future directions include: (1) fine-tuning ResNet18 backbone with low LR, (2) experimenting with EfficientNet or Vision Transformers, (3) applying Grad-CAM to visualize which image regions drive predictions, and (4) testing on larger, more diverse steel defect datasets.
+
+9. How to Run the Code
+Installation
+python -m pip install torch torchvision matplotlib scikit-learn seaborn python-docx
+Train both models
+python deeplearning.py
+Test with a single image
+python test.py --model resnet18 --image "path/to/your/image.jpg"
+python test.py --model custom_cnn --image "path/to/your/image.jpg"
+Run full validation test
+python test.py --model resnet18
+
+References
+K. Song and Y. Yan, "A noise robust method based on completed local binary patterns for hot-rolled steel strip surface defects," Applied Surface Science, vol. 285, pp. 858-864, 2013.
+He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. CVPR 2016, pp. 770-778.
+NEU Surface Defect Database. http://faculty.neu.edu.cn/yunhyan/NEU_surface_defect_database.html
+Paszke, A., et al. (2019). PyTorch: An imperative style, high-performance deep learning library. NeurIPS 32.
+Pan, S. J., & Yang, Q. (2009). A survey on transfer learning. IEEE Trans. Knowledge and Data Engineering, 22(10), 1345-1359.
+LeCun, Y., Bengio, Y., & Hinton, G. (2015). Deep learning. Nature, 521(7553), 436-444.
