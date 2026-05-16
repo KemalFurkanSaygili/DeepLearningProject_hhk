@@ -5,19 +5,16 @@ from torchvision import models, transforms
 from PIL import Image
 import os
 
-# Set page configuration
 st.set_page_config(page_title="Steel Defect Classification", page_icon="🔍", layout="wide")
 
 st.title("🔍 Steel Surface Defect Classification")
 st.write("Upload an image of a steel surface to predict the type of defect.")
 
-# Constants
 CLASSES = ["crazing", "inclusion", "patches", "pitted_surface", "rolled-in_scale", "scratches"]
 IMG_SIZE = 224
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Transform
 val_transform = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor(),
@@ -25,7 +22,6 @@ val_transform = transforms.Compose([
                          std =[0.229, 0.224, 0.225]),
 ])
 
-# Models
 class CustomCNN(nn.Module):
     def __init__(self, num_classes=6):
         super(CustomCNN, self).__init__()
@@ -40,12 +36,12 @@ class CustomCNN(nn.Module):
                 nn.MaxPool2d(2, 2),
             )
         self.features = nn.Sequential(
-            conv_block(3,   32),   # 224->112
-            conv_block(32,  64),   # 112->56
-            conv_block(64,  128),  # 56->28
-            conv_block(128, 256),  # 28->14
+            conv_block(3,   32),
+            conv_block(32,  64),
+            conv_block(64,  128),
+            conv_block(128, 256),
         )
-        self.gap = nn.AdaptiveAvgPool2d(1)   # 14->1
+        self.gap = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(256, 512),
@@ -73,7 +69,6 @@ def build_resnet18(num_classes=6):
 
 @st.cache_resource
 def load_models():
-    # Load ResNet18
     resnet_path = os.path.join(RESULTS_DIR, "resnet18_best.pth")
     resnet_model = None
     if os.path.exists(resnet_path):
@@ -82,7 +77,6 @@ def load_models():
         resnet_model.to(DEVICE)
         resnet_model.eval()
 
-    # Load Custom CNN
     cnn_path = os.path.join(RESULTS_DIR, "custom_cnn_best.pth")
     cnn_model = None
     if os.path.exists(cnn_path):
@@ -95,7 +89,6 @@ def load_models():
 
 resnet_model, cnn_model = load_models()
 
-# Sidebar for model selection
 st.sidebar.title("Configuration")
 model_choice = st.sidebar.selectbox("Select Model", ["ResNet18", "Custom CNN"])
 
@@ -107,7 +100,6 @@ if selected_model is None:
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png", "bmp"])
 
 if uploaded_file is not None:
-    # Display the uploaded image
     image = Image.open(uploaded_file).convert('RGB')
     
     col1, col2 = st.columns(2)
@@ -119,10 +111,8 @@ if uploaded_file is not None:
     with col2:
         st.subheader("Prediction")
         if selected_model is not None:
-            # Preprocess the image
             input_tensor = val_transform(image).unsqueeze(0).to(DEVICE)
             
-            # Predict
             with torch.no_grad():
                 output = selected_model(input_tensor)
                 probabilities = torch.nn.functional.softmax(output[0], dim=0)
@@ -130,11 +120,9 @@ if uploaded_file is not None:
                 predicted_class = CLASSES[predicted_idx]
                 confidence = probabilities[predicted_idx].item()
             
-            # Display Result
             st.success(f"**Predicted Defect:** {predicted_class}")
             st.info(f"**Confidence:** {confidence:.2%}")
             
-            # Show probabilities bar chart
             st.write("Class Probabilities:")
             prob_dict = {CLASSES[i]: float(probabilities[i]) for i in range(len(CLASSES))}
             st.bar_chart(prob_dict)

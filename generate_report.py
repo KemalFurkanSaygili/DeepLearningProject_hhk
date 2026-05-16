@@ -390,29 +390,59 @@ para(
     "and (4) testing on larger, more diverse steel defect datasets.")
 doc.add_paragraph()
 
+# ── 8.5. CODE IMPLEMENTATION ──────────────────────────────────────────────────
+heading("8.5. Code Implementation and Structure")
+para("The project is structured into three main Python scripts, each serving a specific purpose in the deep learning pipeline:")
+
+heading("1. deeplearning.py (Training and Evaluation Pipeline)", level=2)
+for item in [
+    "Data Preprocessing: We use torchvision.transforms to apply data augmentation (Random Flips, Rotation, ColorJitter) and ImageNet normalization.",
+    "Data Loading: datasets.ImageFolder infers class labels automatically. DataLoader creates iterable batches for GPU efficiency.",
+    "Model Building: CustomCNN is a built-from-scratch nn.Module. build_resnet18() loads pre-trained weights and replaces the final fc layer.",
+    "Training Loop: Implements the standard PyTorch backpropagation process (CrossEntropyLoss, Adam optimizer) with a ReduceLROnPlateau scheduler."
+]:
+    bullet(item)
+
+heading("2. app.py (Interactive Web Interface)", level=2)
+for item in [
+    "Uses streamlit to provide a user-friendly GUI.",
+    "Uses @st.cache_resource to load trained .pth weights into memory only once for fast inference.",
+    "Captures uploaded images, applies transforms, and outputs the prediction confidence using Softmax."
+]:
+    bullet(item)
+
+heading("3. test.py (Command Line Inference)", level=2)
+for item in [
+    "Designed for quick terminal evaluations using argparse.",
+    "Allows testing a single image without loading the entire training environment."
+]:
+    bullet(item)
+doc.add_paragraph()
+
 # ── 10. HOW TO RUN ────────────────────────────────────────────────────────────
 heading("9. How to Run the Code")
 
 heading("Installation", level=2)
 cp = doc.add_paragraph()
-r = cp.add_run("python -m pip install torch torchvision matplotlib scikit-learn seaborn python-docx")
+r = cp.add_run("python -m pip install torch torchvision matplotlib scikit-learn seaborn streamlit python-docx")
 r.font.name = "Courier New"; r.font.size = Pt(10)
 
-heading("Train both models", level=2)
+heading("1. Run the Web Application (Recommended)", level=2)
+para("We have developed a user-friendly graphical interface (GUI) using Streamlit. You can easily test our trained models without writing any code.")
 c2 = doc.add_paragraph()
-r2 = c2.add_run("python deeplearning.py")
+r2 = c2.add_run("python -m streamlit run app.py")
 r2.font.name = "Courier New"; r2.font.size = Pt(10)
+para("(Once the app opens in your browser, you can upload any image from the provided NEU-DET_100_samples.zip file to see the real-time predictions of our models.)", italic=True)
 
-heading("Test with a single image", level=2)
+heading("2. Test with a Single Image via Command Line", level=2)
 c3 = doc.add_paragraph()
-r3 = c3.add_run(
-    'python test.py --model resnet18 --image "path/to/your/image.jpg"\n'
-    'python test.py --model custom_cnn --image "path/to/your/image.jpg"')
+r3 = c3.add_run('python test.py --model resnet18 --image "NEU-DET_100_samples/crazing/crazing_1.jpg"')
 r3.font.name = "Courier New"; r3.font.size = Pt(10)
 
-heading("Run full validation test", level=2)
+heading("3. Train the Models (Optional)", level=2)
+para("Pre-trained model weights (.pth files) are already included. However, if you wish to retrain the models from scratch, ensure the full dataset is placed in a folder named NEU-DET inside the project directory, and run:")
 c4 = doc.add_paragraph()
-r4 = c4.add_run("python test.py --model resnet18")
+r4 = c4.add_run("python deeplearning.py")
 r4.font.name = "Courier New"; r4.font.size = Pt(10)
 
 doc.add_paragraph()

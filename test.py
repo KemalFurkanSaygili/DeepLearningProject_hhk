@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from PIL import Image
 
-# ── Ayarlar ───────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_ROOT   = os.path.join(SCRIPT_DIR, "NEU-DET")
 RESULTS_DIR = os.path.join(SCRIPT_DIR, "results")
@@ -45,7 +44,6 @@ val_transform = transforms.Compose([
                          std =[0.229, 0.224, 0.225]),
 ])
 
-# ── Model tanımları (deeplearning.py ile aynı) ────────────────────────────
 class CustomCNN(nn.Module):
     def __init__(self, num_classes=6):
         super().__init__()
@@ -96,8 +94,6 @@ def load_model(model_name: str):
     print(f"  Weights: {pth_path}")
     return model, label
 
-
-# ── 1) Validation seti üzerinde tam test ─────────────────────────────────
 def test_full_validation(model, label):
     val_dir = os.path.join(DATA_ROOT, "validation", "images")
     dataset = datasets.ImageFolder(val_dir, transform=val_transform)
@@ -123,7 +119,6 @@ def test_full_validation(model, label):
     print(f"\n  Per-Class Raporu:")
     print(classification_report(all_labels, all_preds, target_names=CLASSES))
 
-    # Confusion matrix kaydet
     cm       = confusion_matrix(all_labels, all_preds)
     out_path = os.path.join(RESULTS_DIR, f"test_cm_{label.replace(' ','_')}.png")
     fig, ax  = plt.subplots(figsize=(8,6))
@@ -137,8 +132,6 @@ def test_full_validation(model, label):
     print(f"  Confusion matrix kaydedildi: {out_path}")
     return acc
 
-
-# ── 2) Tek görüntü tahmini ────────────────────────────────────────────────
 def predict_single(model, label, image_path: str):
     if not os.path.exists(image_path):
         print(f"  HATA: Görüntü bulunamadı: {image_path}")
@@ -163,7 +156,6 @@ def predict_single(model, label, image_path: str):
         print(f"    {cls:<18} {p*100:5.1f}%  {bar}{arrow}")
     print(f"{'='*50}")
 
-    # Görüntüyü + olasılıkları kaydet
     out_path = os.path.join(RESULTS_DIR, "single_prediction.png")
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     inv = transforms.Normalize(mean=[-0.485/0.229,-0.456/0.224,-0.406/0.225],
@@ -186,8 +178,6 @@ def predict_single(model, label, image_path: str):
     plt.close()
     print(f"\n  Grafik kaydedildi: {out_path}")
 
-
-# ── Ana giriş ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="NEU-DET Model Test")
     parser.add_argument("--model", choices=["resnet18","custom_cnn"],

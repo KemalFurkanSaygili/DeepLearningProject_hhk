@@ -46,19 +46,11 @@ from torchvision import datasets, transforms, models
 from sklearn.metrics import (classification_report, confusion_matrix,
                              accuracy_score, f1_score)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 0.  REPRODUCIBILITY
-# ─────────────────────────────────────────────────────────────────────────────
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 1.  CONFIGURATION
-# ─────────────────────────────────────────────────────────────────────────────
-# Resolve dataset path relative to this script's location
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 DATA_ROOT    = os.path.join(SCRIPT_DIR, "NEU-DET")
 RESULTS_DIR  = os.path.join(SCRIPT_DIR, "results")
@@ -72,8 +64,6 @@ BATCH_SIZE   = 32
 NUM_EPOCHS   = 20
 LR           = 1e-3
 WEIGHT_DECAY = 1e-4
-
-# For the submission version: limit dataset to 100 samples total
 SUBMISSION_MODE     = False   # Set True to use only 100 samples
 SUBMISSION_SAMPLES  = 100
 
@@ -85,9 +75,6 @@ print(f"  Device  : {DEVICE}")
 print(f"  Results : {RESULTS_DIR}")
 print(f"{'='*60}\n")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2.  DATA TRANSFORMS
-# ─────────────────────────────────────────────────────────────────────────────
 train_transform = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.RandomHorizontalFlip(),
@@ -106,9 +93,6 @@ val_transform = transforms.Compose([
                          std =[0.229, 0.224, 0.225]),
 ])
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3.  DATASETS & DATALOADERS
-# ─────────────────────────────────────────────────────────────────────────────
 train_dir = os.path.join(DATA_ROOT, "train", "images")
 val_dir   = os.path.join(DATA_ROOT, "validation", "images")
 
@@ -116,7 +100,6 @@ full_train = datasets.ImageFolder(train_dir, transform=train_transform)
 full_val   = datasets.ImageFolder(val_dir,   transform=val_transform)
 
 if SUBMISSION_MODE:
-    # Randomly pick 100 samples (stratified: ~16-17 per class)
     per_class = SUBMISSION_SAMPLES // NUM_CLASSES
     indices = []
     for cls_idx in range(NUM_CLASSES):
@@ -136,9 +119,6 @@ train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
 val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE,
                           shuffle=False, num_workers=0, pin_memory=False)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4.  MODEL — Custom CNN
-# ─────────────────────────────────────────────────────────────────────────────
 class CustomCNN(nn.Module):
     """
     A compact but expressive CNN built for 6-class defect classification.
@@ -186,15 +166,10 @@ class CustomCNN(nn.Module):
         return x
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5.  MODEL — Pretrained ResNet18 (Transfer Learning)
-# ─────────────────────────────────────────────────────────────────────────────
 def build_resnet18(num_classes=6):
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-    # Freeze all layers except the final FC
     for param in model.parameters():
         param.requires_grad = False
-    # Replace the classification head
     model.fc = nn.Sequential(
         nn.Linear(model.fc.in_features, 256),
         nn.ReLU(inplace=True),
@@ -204,9 +179,6 @@ def build_resnet18(num_classes=6):
     return model
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 6.  TRAINING LOOP
-# ─────────────────────────────────────────────────────────────────────────────
 def train_model(model, loaders, criterion, optimizer, scheduler,
                 num_epochs, model_name="model"):
     """
@@ -271,9 +243,6 @@ def train_model(model, loaders, criterion, optimizer, scheduler,
     return best_state, history
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 7.  EVALUATION HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 def evaluate(model, loader):
     """Returns (all_preds, all_labels) numpy arrays."""
     model.eval()
@@ -287,9 +256,6 @@ def evaluate(model, loader):
     return np.array(all_preds), np.array(all_labels)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 8.  PLOTTING HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 def plot_training_history(histories, names, save_path):
     """Side-by-side loss & accuracy curves for multiple models."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -428,23 +394,14 @@ def plot_model_comparison(results, save_path):
     print(f"  Saved: {save_path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 9.  MAIN
-# ─────────────────────────────────────────────────────────────────────────────
 def main():
     loaders = {"train": train_loader, "val": val_loader}
     criterion = nn.CrossEntropyLoss()
     results   = {}
     histories = []
     names     = []
-
-    # ── Plot dataset distribution ──────────────────────────────────────────
     print("\n[1/6] Plotting dataset distribution...")
     plot_class_distribution(os.path.join(RESULTS_DIR, "dataset_distribution.png"))
-
-    # ══════════════════════════════════════════════════════════════════════
-    # MODEL A : Custom CNN
-    # ══════════════════════════════════════════════════════════════════════
     print("\n[2/6] Building Custom CNN...")
     custom_cnn = CustomCNN(num_classes=NUM_CLASSES)
     total_params = sum(p.numel() for p in custom_cnn.parameters())
@@ -479,10 +436,6 @@ def main():
     plot_sample_predictions(custom_cnn, val_loader, CLASSES,
                             "Custom CNN — Sample Predictions",
                             os.path.join(RESULTS_DIR, "samples_custom_cnn.png"))
-
-    # ══════════════════════════════════════════════════════════════════════
-    # MODEL B : Transfer Learning with ResNet18
-    # ══════════════════════════════════════════════════════════════════════
     print("\n[3/6] Building ResNet18 (Transfer Learning)...")
     resnet18 = build_resnet18(num_classes=NUM_CLASSES)
     trainable = sum(p.numel() for p in resnet18.parameters() if p.requires_grad)
@@ -518,8 +471,6 @@ def main():
     plot_sample_predictions(resnet18, val_loader, CLASSES,
                             "ResNet18 TL — Sample Predictions",
                             os.path.join(RESULTS_DIR, "samples_resnet18.png"))
-
-    # ── Combined plots ─────────────────────────────────────────────────────
     print("\n[4/6] Saving training history plot...")
     plot_training_history(histories, names,
                           os.path.join(RESULTS_DIR, "training_history.png"))
@@ -527,8 +478,6 @@ def main():
     print("\n[5/6] Saving model comparison plot...")
     plot_model_comparison(results,
                           os.path.join(RESULTS_DIR, "model_comparison.png"))
-
-    # ── Summary ────────────────────────────────────────────────────────────
     print("\n[6/6] Summary")
     print(f"  {'='*50}")
     print(f"  {'Model':<18} {'Val Accuracy':>14} {'F1 Macro':>12}")
