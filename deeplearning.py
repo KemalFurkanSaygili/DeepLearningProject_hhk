@@ -20,7 +20,7 @@ How to Run:
        python -m pip install torch torchvision matplotlib scikit-learn seaborn
   3. Run:
        python deeplearning.py
-  4. Results (plots + model) will be saved in ./results/ folder.
+  4. Results (plots + model) will be saved in ./results/ folder.A
 =============================================================================
 """
 
